@@ -63,10 +63,12 @@ python run_scade_scannet.py test --data_dir datasets/scannet/ --scene_id scene07
 ### To output the video demo
 python run_scade_scannet.py video --data_dir datasets/scannet/ --scene_id scene0758_00 --cimle_dir dump_1102_scene0758_sfmaligned_indv --ckpt_dir pretrained_models/scannet --expname scene758_scade
 ```
+
 On In-the-Wild dataset:
 ```
 python run_scade_wild.py test --data_dir datasets/in_the_wild/ --scene_id kitchen --cimle_dir kitchen_our_ambiguity_aware_prior_samples --ckpt_dir pretrained_models/in_the_wild --expname kitchen_scade
 ```
+
 On Tanks and Temples dataset:
 ```
 ### On test images
