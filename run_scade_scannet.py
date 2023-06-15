@@ -25,8 +25,8 @@ import torchvision
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm, trange
 
-from model import NeRF, NeRF_camlatent_add, get_embedder, get_rays, sample_pdf, sample_pdf_joint, img2mse, mse2psnr, to8b, \
-    compute_depth_loss, select_coordinates, to16b, resnet18_skip, compute_space_carving_loss \
+from model import NeRF, get_embedder, get_rays, sample_pdf, sample_pdf_joint, img2mse, mse2psnr, to8b, \
+    compute_depth_loss, select_coordinates, to16b, compute_space_carving_loss, \
     sample_pdf_return_u, sample_pdf_joint_return_u
 from data import create_random_subsets, load_scene_scannet, convert_depth_completion_scaling_to_m, \
     convert_m_to_depth_completion_scaling, get_pretrained_normalize, resize_sparse_depth
@@ -868,7 +868,7 @@ def train_nerf(images, depths, valid_depths, poses, intrinsics, i_split, args, s
     valid_depths = torch.Tensor(valid_depths[i_relevant_for_training]).bool().to(device)
     poses = torch.Tensor(poses[i_relevant_for_training]).to(device)
     intrinsics = torch.Tensor(intrinsics[i_relevant_for_training]).to(device)
-    all_depth_hypothesis = torch.Tensor(all_depth_hypothesis).to(device)å
+    all_depth_hypothesis = torch.Tensor(all_depth_hypothesis).to(device)
     intrinsics = torch.Tensor(intrinsics[i_relevant_for_training]).to(device)
 
     # create nerf model
@@ -1191,7 +1191,7 @@ def config_parser():
     parser.add_argument('--mask_corners', default= False, type=bool)
 
     parser.add_argument('--load_pretrained', default= False, type=bool)
-    parser.add_argument("--pretrained_dir", type=str, default="Scannet/scene758/scene0758_00_sc007_sslr1e-07",
+    parser.add_argument("--pretrained_dir", type=str, default="pretrained_models/scannet/scene758_scade/",
                         help='folder directory name for where the pretrained model that we want to load is')
 
     parser.add_argument("--input_ch_cam", type=int, default=0,
@@ -1217,22 +1217,6 @@ def run_nerf():
         os.makedirs(os.path.join(args.ckpt_dir, args.expname), exist_ok=True)
         with open(args_file, 'w') as af:
             json.dump(vars(args), af, indent=4)
-    else:
-        if args.expname is None:
-            print("Error: Specify experiment name for test or video")
-            exit()
-        tmp_task = args.task
-        tmp_data_dir = args.data_dir
-        tmp_ckpt_dir = args.ckpt_dir
-        # load nerf parameters from training
-        args_file = os.path.join(args.ckpt_dir, args.expname, 'args.json')
-        with open(args_file, 'r') as af:
-            args_dict = json.load(af)
-        args = Namespace(**{k: v for k, v in args_dict._get_kwargs() if k in args})
-        # task and paths are not overwritten
-        args.task = tmp_task
-        args.data_dir = tmp_data_dir
-        args.ckpt_dir = tmp_ckpt_dir
 
     print('\n'.join(f'{k}={v}' for k, v in vars(args).items()))
 

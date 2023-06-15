@@ -1,0 +1,9 @@
+*.DS_Store
+*/__pycache__/*
+datasets/*
+ambiguity_aware_prior_pretrained_model/*
+pretrained_models/*
+dump_*
+*.zip
+runs/*
+logs*
