@@ -80,7 +80,10 @@ python run_scade_wild.py video --data_dir datasets/tanks_and_temples/ --scene_id
 
 ### Running Ambiguity-Aware Prior Demo
 
-TODO Documentation.
+```
+cd ambiguity_aware_prior
+python tools/output_depth_hypothesis_demo.py --dataroot demo
+```
 
 ### Training SCADE
 ```
@@ -89,6 +92,18 @@ python run_scade_scannet.py train --data_dir datasets/scannet/ --scene_id scene0
 
 ### Training our Ambiguity-Aware Prior
 TODO Documentation.
+
+### Sampling Depth Hypothesis for SCADE training
+```
+### For Scannet data -- set the appropriate dataroot for the scene
+python tools/output_depth_hypothesis_scannet.py
+
+### For In the Wild Datsaet -- set the appropriate dataroot for the scene
+python tools/output_depth_hypothesis_wild.py
+
+### For Tanks and Temples -- set the appropriate dataroot for the scene and is_wild flag is False
+python tools/output_depth_hypothesis_wild.py
+```
 
 ## Miscellaneous
 [DDP](https://github.com/barbararoessle/dense_depth_priors_nerf) depth completion prior trained on the Taskonomy dataset can be found [here](http://download.cs.stanford.edu/orion/scade/ddp_completion_taskonomy_prior.zip).
