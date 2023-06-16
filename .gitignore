@@ -7,3 +7,6 @@ dump_*
 *.zip
 runs/*
 logs*
+*.pth
+*pyc
+*dump_*

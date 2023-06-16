@@ -133,8 +133,8 @@ model.cuda()
 ### Load model
 model_dict = model.state_dict()
 
-# CKPT_FILE = os.path.join("outputs", LOG_DIR, "ckpt", CKPT)
-CKPT_FILE = os.path.join(LOG_DIR, "ckpt", CKPT)
+# CKPT_FILE = os.path.join(LOG_DIR, CKPT)
+CKPT_FILE = os.path.join(LOG_DIR, CKPT)
 
 if os.path.isfile(CKPT_FILE):
     print("loading checkpoint %s" % CKPT_FILE)

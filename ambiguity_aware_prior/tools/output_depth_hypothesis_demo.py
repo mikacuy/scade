@@ -39,7 +39,7 @@ parser.add_argument("--ckpt", default="model.pth", help="checkpoint", type=str)
 parser.add_argument('--phase', type=str, default='test', help='Training flag')
 
 
-parser.add_argument('--dataroot', default='../datasets/in_the_wild/lounge/train/', help='Root dir for dataset')
+parser.add_argument('--dataroot', default='datasets/in_the_wild/lounge/train/', help='Root dir for dataset')
 parser.add_argument('--dump_dir', default= "dump_prior_samples/", type=str)
 
 parser.add_argument('--backbone', default= "resnext101", type=str)
@@ -104,10 +104,11 @@ DUMP_DIR = FLAGS.dump_dir
 if not os.path.exists(DUMP_DIR): os.mkdir(DUMP_DIR)
 temp_fol = os.path.join(DUMP_DIR, "tmp")
 if not os.path.exists(temp_fol): os.mkdir(temp_fol)
-pc_fol = os.path.join(DUMP_DIR, "pc")
-if not os.path.exists(pc_fol): os.mkdir(pc_fol)
-gt_fol = os.path.join(DUMP_DIR, "gt")
-if not os.path.exists(gt_fol): os.mkdir(gt_fol)
+
+### Create output dir for the multiple hypothesis
+hypothesis_outdir = os.path.join(FLAGS.dataroot, "leres_cimle", DUMP_DIR)
+if not os.path.exists(hypothesis_outdir): os.makedirs(hypothesis_outdir)
+
 
 LOG_FOUT = open(os.path.join(DUMP_DIR, 'log_evaluate.txt'), 'w')
 LOG_FOUT.write(str(FLAGS)+'\n')
@@ -364,57 +365,41 @@ def per_pixel_error(prediction, target):
 
 ### Dataset
 
-### Dataloader
-datapath = FLAGS.dataroot
+image_dir = os.path.join(FLAGS.dataroot)
 
-if not IS_WILD:
-    dataset = FinetuneDataset(datapath, "processed", is_nsvf=IS_NSVF, split="test", data_aug=False)
-else:
-    dataset = FinetuneDataset_wild(datapath, "processed", is_nsvf=IS_NSVF, split="test", data_aug=False)
+imgs_list = os.listdir(image_dir)
+imgs_list.sort()
 
+imgs_path = [os.path.join(image_dir, i) for i in imgs_list[::-1] if not "leres_cimle" in i]
+print(len(imgs_path))
 
-### Create output dir for the multiple hypothesis
-hypothesis_outdir = os.path.join(FLAGS.dataroot, "leres_cimle", DUMP_DIR)
-if not os.path.exists(hypothesis_outdir): os.makedirs(hypothesis_outdir)
-
-##### Also load intrinsics and depth scale for the dataset. #####
-json_fname =  os.path.join(datapath, '../transforms_train.json')
-with open(json_fname, 'r') as fp:
-    meta = json.load(fp)
-
-depth_scaling_factor = float(meta['depth_scaling_factor'])
-#################################################################
-
-#### Evaluation ######
-zcache_dataloader = torch.utils.data.DataLoader(
-    dataset=dataset,
-    batch_size=1,
-    num_workers=0,
-    shuffle=False)
-print(len(zcache_dataloader))
-
-mini_batch_size = 5
-num_sets = int(NUM_SAMPLE/mini_batch_size)
-true_num_samples = num_sets*mini_batch_size # just take the floor
 
 ### For quantitative evaluation
 num_evaluated = 0
 
 model.eval()
 
-### Focal length for scannet
-if not IS_NSVF:
-    f = 577.870605
-else:
-    ### Check this for other models
-    f = 1111.111
+mini_batch_size = 5
+num_sets = int(NUM_SAMPLE/mini_batch_size)
+true_num_samples = num_sets*mini_batch_size # just take the floor
 
 with torch.no_grad():
+    for i in range(len(imgs_path)):
+        curr_img_path = imgs_path[i]
 
-    all_scales = []
-    all_shifts = []
+        print(curr_img_path)
+        
+        ## Load iamge
+        rgb = cv2.imread(curr_img_path)
+        rgb_c = rgb.copy()
+        gt_depth = None
+        A_resize = cv2.resize(rgb_c, (448, 448), interpolation=cv2.INTER_LINEAR)
+        img_torch = scale_torch(A_resize)[None, :, :, :]
 
-    for i, data in enumerate(zcache_dataloader):
+        data = {}
+        data['rgb'] = img_torch
+        data['A_paths'] = imgs_path[i]
+
 
         batch_size = data['rgb'].shape[0]
         C = data['rgb'].shape[1]
@@ -428,61 +413,20 @@ with torch.no_grad():
 
 
         rgb = torch.clone(data['rgb'][0]).permute(1, 2, 0).to("cpu").detach().numpy() 
-        rgb = rgb[:, :, ::-1] ## dataloader is bgr
+        # rgb = rgb[:, :, ::-1] ## dataloader is bgr
         rgb = 255 * (rgb - rgb.min()) / (rgb.max() - rgb.min())
         rgb = np.array(rgb, np.int)
 
-
-        ### Raw gt depth ###
-        curr_depth_path = data['B_paths'][0]
-
-        depth_img = cv2.imread(curr_depth_path, cv2.IMREAD_UNCHANGED).astype(np.float64)
-        valid_depth = depth_img > 0.5
-
-        if not IS_NSVF:
-            ## Scannet depth
-            depth_img = (depth_img/depth_scaling_factor).astype(np.float32)
-        else:
-            depth_img = remap_color_to_depth(depth_img)
-            depth_img = depth_img.astype(float)
-
-        orig_shape = depth_img.shape
-
-        ### For computing scale and shift
-        depth_orig_size = depth_img.copy()
-        depth_img = cv2.resize(depth_img, (448, 448), interpolation=cv2.INTER_NEAREST)
-
-        #### Get image focal length
-        frame = meta['frames'][i]
-        fx, fy, cx, cy = frame['fx'], frame['fy'], frame['cx'], frame['cy']
-        intrinsics = np.array((fx, fy, cx, cy))
-        ###########################        
-
-        ### Load sparse SfM depth
-        curr_sfm_depth_path = data['C_paths'][0]
-        sfm_depth_img = cv2.imread(curr_sfm_depth_path, cv2.IMREAD_UNCHANGED).astype(np.float64)
-        sfm_depth_img = (sfm_depth_img/depth_scaling_factor).astype(np.float32)
-
-        ### Filter out SfM points that are beyond the far plane
-        sfm_depth_img[sfm_depth_img > meta["far"]] = 0.0
-        valid_sfm_depth = sfm_depth_img > 0.5
-
+  
 
         ### Iterate over the minibatch
         image_fname = []
 
-        if i%10==0  or VISU_ALL:      
-            img_name = "image" + str(i)
-            cv2.imwrite(os.path.join(temp_fol, img_name+"-raw.png"), rgb)
-            image_fname.append(os.path.join(temp_fol, img_name+"-raw.png"))
-            img_name = "image" + str(i) + "_gt"
-            reconstruct_depth_intrinsics(depth_img, rgb, gt_fol, img_name, intrinsics)
-
-
-        sfm_image_scales = []
-        sfm_image_shifts = []
-
         all_pred_depths = []
+
+        img_name = "image" + str(i)
+        cv2.imwrite(os.path.join(temp_fol, img_name+"-raw.png"), rgb_c)
+        image_fname.append(os.path.join(temp_fol, img_name+"-raw.png"))
 
         for k in range(num_sets):
 
@@ -501,29 +445,14 @@ with torch.no_grad():
 
                 img_name = "image" + str(i) + "_" + str(k) + "_" + str(s)
                 
-
                 ### Resize first then compute for error
-                curr_pred_depth_raw = cv2.resize(curr_pred_depth, (depth_orig_size.shape[1], depth_orig_size.shape[0])) ### check this resize function 
+                curr_pred_depth_raw = cv2.resize(curr_pred_depth, (rgb_c.shape[1], rgb_c.shape[0])) 
 
-                ## SfM depth
-                curr_pred_sfm_depth_metric, curr_sfm_scale, curr_sfm_shift = recover_metric_depth(curr_pred_depth_raw, sfm_depth_img)
-
-                sfm_image_scales.append(curr_sfm_scale)
-                sfm_image_shifts.append(curr_sfm_shift)
-
-                if i%10==0  or VISU_ALL:
-                    # save depth
-                    plt.imsave(os.path.join(temp_fol, img_name+'-depth.png'), curr_pred_sfm_depth_metric, cmap='rainbow')
-                    image_fname.append(os.path.join(temp_fol, img_name+'-depth.png'))
-
-                    ### Output point cloud
-                    reconstruct_depth_intrinsics(curr_pred_depth, rgb, pc_fol, img_name, intrinsics)
-
-                    rgb_orig = cv2.imread(data['A_paths'][0])
-                    reconstruct_depth_intrinsics(curr_pred_sfm_depth_metric, rgb_orig, pc_fol, img_name+"-sfmscaled", intrinsics)
+                plt.imsave(os.path.join(temp_fol, img_name+'-depth.png'), curr_pred_depth_raw, cmap='rainbow')
+                image_fname.append(os.path.join(temp_fol, img_name+'-depth.png'))
 
                 ### Change to using aligned depth instead
-                all_pred_depths.append(curr_pred_sfm_depth_metric)
+                all_pred_depths.append(curr_pred_depth_raw)
 
             #######
 
@@ -547,48 +476,36 @@ with torch.no_grad():
 
 
                 outfname = os.path.join(hypothesis_outdir, fname)
-
                 np.save(outfname, np.array(curr_depth))                
 
-                ## Check output --> debug
-                depth = np.load(outfname).astype(np.float64)
-                print(depth)
-                print(depth.shape)
-                print(outfname)
-                print()
 
 
-        if i%10==0  or VISU_ALL:
-            ### Collate and output to a single image
-            height = H
-            width = W    
+        height = rgb_c.shape[0]
+        width = rgb_c.shape[1]    
 
-            #Output to a single image
-            for k in range(num_sets):
+        #Output to a single image
+        for k in range(num_sets):
 
-                new_im = Image.new('RGBA', (width*(1+mini_batch_size), height))
+            new_im = Image.new('RGBA', (width*(1+mini_batch_size), height))
 
-                curr_image_fname = []
-                curr_image_fname.append(image_fname[0])
-                for j in range(k*mini_batch_size, (k+1)*mini_batch_size):
-                    curr_image_fname.append(image_fname[j])
+            curr_image_fname = []
+            curr_image_fname.append(image_fname[0])
+            for j in range(k*mini_batch_size + 1, (k+1)*mini_batch_size+1):
+                curr_image_fname.append(image_fname[j])
 
-                images = []
+            images = []
 
-                for fname in curr_image_fname:
-                    images.append(Image.open(fname))
+            for fname in curr_image_fname:
+                images.append(Image.open(fname))
 
-                x_offset = 0
-                for im in images:
-                    new_im.paste(im, (x_offset,0))
-                    x_offset += width
+            x_offset = 0
+            for im in images:
+                new_im.paste(im, (x_offset,0))
+                x_offset += width
 
-                output_image_filename = os.path.join(DUMP_DIR, str(i) + "_" + str(k) + '_collate.png')
-                new_im.save(output_image_filename) 
-
-        if i%100==0:
-            print("Finished "+str(i)+"/"+str(len(zcache_dataloader)
-                )+".")
+            output_image_filename = os.path.join(DUMP_DIR, str(i) + "_" + str(k) + '_collate.png')
+            new_im.save(output_image_filename) 
+            print(output_image_filename)
 
 
 log_string("=" * 20)
