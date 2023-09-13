@@ -107,3 +107,6 @@ python tools/output_depth_hypothesis_wild.py
 
 ## Miscellaneous
 [DDP](https://github.com/barbararoessle/dense_depth_priors_nerf) depth completion prior trained on the Taskonomy dataset can be found [here](http://download.cs.stanford.edu/orion/scade/ddp_completion_taskonomy_prior.zip).
+
+## License
+This repository is released under MIT License (see LICENSE file for details).
