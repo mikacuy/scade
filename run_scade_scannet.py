@@ -357,10 +357,10 @@ def render_images_with_metrics(count, indices, images, depths, valid_depths, pos
             target_reshape = target.view(1, -1, 3)
 
             ## No intercept          
-            X = torch.linalg.lstsq(rgb_reshape, target_reshape).solution
-            rgb_reshape = rgb_reshape @ X
-            rgb_reshape = rgb_reshape.view(rgb.shape)
-            rgb = rgb_reshape
+            # X = torch.linalg.lstsq(rgb_reshape, target_reshape).solution
+            # rgb_reshape = rgb_reshape @ X
+            # rgb_reshape = rgb_reshape.view(rgb.shape)
+            # rgb = rgb_reshape
             
             # compute color metrics
             img_loss = img2mse(rgb, target)
